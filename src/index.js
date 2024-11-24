@@ -1,26 +1,5 @@
 import "./style.css";
-
-import clearDayIcon from "./icons/clear-day.svg";
-import clearNightIcon from "./icons/clear-night.svg";
-import partlyCloudyDayIcon from "./icons/partly-cloudy-day.svg";
-import partlyCloudyNightIcon from "./icons/partly-cloudy-night.svg";
-import cloudIcon from "./icons/cloud.svg";
-import windIcon from "./icons/wind.svg";
-import fogIcon from "./icons/fog.svg";
-import rainIcon from "./icons/rain.svg";
-import snowIcon from "./icons/snow.svg";
-
-const conditionMap = {
-    "clear-day": clearDayIcon,
-    "clear-night": clearNightIcon,
-    "partly-cloudy-day": partlyCloudyDayIcon,
-    "partly-cloudy-night": partlyCloudyNightIcon,
-    cloud: cloudIcon,
-    wind: windIcon,
-    fog: fogIcon,
-    rain: rainIcon,
-    snow: snowIcon,
-};
+import conditionMap from "./conditionMap";
 
 const API_KEY = "X6WS2JMR5ETMBW469W9GKPJAH";
 
@@ -29,31 +8,45 @@ let daysImperial;
 let currentDays;
 let currentDay;
 
-let unit = "metric";
-
 const weatherContainer = document.getElementById("weather");
 const searchInput = document.getElementById("search");
 const searchBtn = document.getElementById("searchBtn");
 
-searchBtn.addEventListener("click", async () => {
-    const city = searchInput.value;
-    const data = await getWeatherData(city);
-    daysMetric = getWeatherDays(data);
-    daysImperial = getImperialWeatherDays();
-    currentDays = daysMetric;
-    currentDay = daysMetric[0];
-    renderWeather();
-});
-
 function celsiusToFahrenheit(celsius) {
-    return (celsius * 9/5) + 32;
+    return (celsius * 9) / 5 + 32;
 }
 
 function kphToMph(kph) {
     return kph * 0.621371;
 }
 
-function getImperialWeatherDays() {
+function createMetricWeatherDays(data) {
+    const timezone = data.timezone;
+    const now = new Date().toLocaleString("en-US", { timeZone: timezone });
+    const cityHour = new Date(now).getHours();
+
+    const days = data.days.slice(0, 7).map((day) => {
+        const currentHourData = day.hours[cityHour];
+
+        return {
+            shortDay: getShortDayName(Number(currentHourData.datetimeEpoch) * 1000, timezone),
+            temp: Math.round(currentHourData.temp),
+            condition: currentHourData.conditions,
+            icon: currentHourData.icon,
+            address: data.resolvedAddress,
+            time: formatEpochTime(Number(currentHourData.datetimeEpoch) * 1000, timezone),
+            precipitation: Math.round(currentHourData.precip),
+            humidity: Math.round(currentHourData.humidity),
+            wind: Math.round(currentHourData.windspeed),
+            max: Math.round(day.tempmax),
+            min: Math.round(day.tempmin),
+        };
+    });
+
+    return days;
+}
+
+function createImperialWeatherDays() {
     return daysMetric.map((day) => {
         return {
             ...day,
@@ -69,60 +62,31 @@ async function getWeatherData(city) {
     const url = `https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/${city}?key=${API_KEY}&unitGroup=metric`;
 
     const response = await fetch(url);
+
+    if (!response.ok) {
+        throw new Error(`Error fetching weather data: ${response.statusText}`);
+    }
+
     const data = await response.json();
 
     return data;
 }
 
-function getNearestHour() {
-    const now = new Date();
-
-    const minutes = now.getMinutes();
-
-    if (minutes >= 30) {
-        now.setHours(now.getHours() + 1);
-    }
-
-    return now.getHours();
-}
-
-function formatEpochTime(epochTime) {
-    const date = new Date(epochTime * 1000);
+function formatEpochTime(epochTime, timeZone) {
+    const date = new Date(epochTime);
     const options = {
         weekday: "long",
         hour: "numeric",
         minute: "2-digit",
         hour12: true,
+        timeZone
     };
     return date.toLocaleString("en-US", options);
 }
 
-function getWeatherDays(data) {
-    const currentHour = getNearestHour();
-    const days = data.days.slice(0, 7).map((day) => {
-        const hour = day.hours[currentHour];
-
-        return {
-            date: day.datetime,
-            temp: Math.round(hour.temp),
-            condition: hour.conditions,
-            icon: hour.icon,
-            address: data.resolvedAddress,
-            time: formatEpochTime(hour.datetimeEpoch),
-            precipitation: Math.round(hour.precip),
-            humidity: Math.round(hour.humidity),
-            wind: Math.round(hour.windspeed),
-            max: Math.round(day.tempmax),
-            min: Math.round(day.tempmin),
-        };
-    });
-
-    return days;
-}
-
-function getShortDayName(date) {
+function getShortDayName(date, timeZone) {
     const dateObj = new Date(date);
-    const shortDay = dateObj.toLocaleDateString("en-US", { weekday: "short" });
+    const shortDay = dateObj.toLocaleDateString("en-US", { weekday: "short", timeZone });
 
     return shortDay;
 }
@@ -134,11 +98,11 @@ function renderWeather() {
     <div class="main">
         <div class="header">
             <div class="temperature">
-                <img src="${conditionMap[currentDay.icon] || clearDayIcon}" alt="${currentDay.condition}">
+                <img src="${conditionMap[currentDay.icon] || conditionMap["clear-day"]}" alt="${currentDay.condition}">
                 <h2>${currentDay.temp}</h2>
                 <div class="controls">
-                    <button id="celsius" class="${(currentDays === daysMetric) ? 'selected' : ''}">°C</button>
-                    <button id="fahrenheit" class="${(currentDays === daysImperial) ? 'selected' : ''}">°F</button>
+                    <button id="celsius" class="${currentDays === daysMetric ? "selected" : ""}">°C</button>
+                    <button id="fahrenheit" class="${currentDays === daysImperial ? "selected" : ""}">°F</button>
                 </div>
             </div>
             <div class="time">
@@ -148,7 +112,7 @@ function renderWeather() {
             <div class="info">
                 <p>Precipitation: ${currentDay.precipitation}%</p>
                 <p>Humidity: ${currentDay.humidity}%</p>
-                <p>Wind: ${currentDay.wind} ${(currentDays === daysMetric) ? "km/h" : "mph"}</p>
+                <p>Wind: ${currentDay.wind} ${currentDays === daysMetric ? "km/h" : "mph"}</p>
             </div>
         </div>
     </div>
@@ -160,8 +124,8 @@ function renderWeather() {
             .map((day, index) => {
                 return `
             <div class="day ${day === currentDay ? "selected" : ""}" id="${index}">
-                <h4>${getShortDayName(day.date)}</h4>
-                <img src="${conditionMap[day.icon] || clearDayIcon}" alt="${day.condition}">
+                <h4>${day.shortDay}</h4>
+                <img src="${conditionMap[day.icon] || conditionMap["clear-day"]}" alt="${day.condition}">
                 <div>
                     <p class="high">${day.max}°</p>
                     <p class="low">${day.min}°</p>
@@ -171,6 +135,21 @@ function renderWeather() {
             .join("")}
     </nav>`;
 }
+
+searchBtn.addEventListener("click", async () => {
+    try {
+        const city = searchInput.value;
+        const data = await getWeatherData(city);
+        daysMetric = createMetricWeatherDays(data);
+        daysImperial = createImperialWeatherDays();
+        currentDays = daysMetric;
+        currentDay = daysMetric[0];
+        renderWeather();
+    } catch (error) {
+        console.log(error);
+        alert("Error, check internet connection and try again");
+    }
+});
 
 weatherContainer.addEventListener("click", (e) => {
     const dayElement = e.target.closest(".day");
@@ -197,4 +176,8 @@ weatherContainer.addEventListener("click", (e) => {
     }
 });
 
-
+document.addEventListener("keypress", (e) => {
+    if (e.key === "Enter") {
+        searchBtn.click();
+    }
+});
