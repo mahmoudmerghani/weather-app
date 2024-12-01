@@ -145,6 +145,7 @@ searchBtn.addEventListener("click", async () => {
         currentDays = daysMetric;
         currentDay = daysMetric[0];
         renderWeather();
+        weatherContainer.style.display = "block";
     } catch (error) {
         console.log(error);
         alert("Error, Check internet connection and try again");
