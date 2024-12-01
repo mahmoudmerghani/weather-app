@@ -147,7 +147,7 @@ searchBtn.addEventListener("click", async () => {
         renderWeather();
     } catch (error) {
         console.log(error);
-        alert("Error, check internet connection and try again");
+        alert("Error, Check internet connection and try again");
     }
 });
 
